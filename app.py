@@ -1,28 +1,31 @@
 from flask import Flask, request, jsonify
+from model import count_vehicles  # import AI model
 
 app = Flask(__name__)
-
-# Simple AI logic (later replace with ML model)
-def ai_signal_controller(data):
-    # Example input: {"road1": 10, "road2": 20, "road3": 5, "road4": 15}
-    total = sum(data.values())
-    timings = {}
-    for road, count in data.items():
-        timings[road] = max(10, int((count / total) * 60))  # proportional time allocation
-    return timings
-
-@app.route('/predict', methods=['POST'])
-def predict():
-    try:
-        data = request.json
-        result = ai_signal_controller(data)
-        return jsonify({"signal_timings": result})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
 
 @app.route('/')
 def home():
     return "AI Traffic Signal Server is Running!"
 
+@app.route('/predict', methods=['POST'])
+def predict():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files['file']
+    file_path = "temp.jpg"
+    file.save(file_path)
+
+    # Get vehicle count from AI model
+    vehicles = count_vehicles(file_path)
+
+    # Simple traffic logic
+    green_time = 30 if vehicles > 5 else 10
+
+    return jsonify({
+        "vehicles_detected": vehicles,
+        "green_light_time": green_time
+    })
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(debug=True)
