@@ -1,20 +1,13 @@
 from ultralytics import YOLO
 
-# Load pre-trained YOLOv8 model
-model = YOLO("yolov8n.pt")  # 'n' = nano (fast, lightweight)
+# Use smallest YOLOv8 nano model (fast + low RAM)
+MODEL_PATH = "yolov8n.pt"
 
 def count_vehicles(image_path):
-    """
-    Detect vehicles in an image and return count.
-    """
-    results = model.predict(image_path, imgsz=640)
-    count = 0
+    # Load model only when function is called → saves memory
+    model = YOLO(MODEL_PATH)
+    results = model(image_path)
 
-    for r in results:
-        for box in r.boxes:
-            cls = int(box.cls[0])  # class ID
-            # YOLO class IDs: 2=car, 3=motorbike, 5=bus, 7=truck
-            if cls in [2, 3, 5, 7]:
-                count += 1
-
+    # Count number of detections
+    count = len(results[0].boxes)
     return count
