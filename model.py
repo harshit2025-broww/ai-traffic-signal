@@ -1,7 +1,8 @@
 import cv2
+import os
 
-# Load Haar Cascade for car detection
-car_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_car.xml")
+CASCADE_PATH = os.path.join(os.path.dirname(__file__), "haarcascade_car.xml")
+car_cascade = cv2.CascadeClassifier(CASCADE_PATH)
 
 def count_cars(image_path: str) -> int:
     img = cv2.imread(image_path)
