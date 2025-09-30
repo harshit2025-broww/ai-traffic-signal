@@ -1,36 +1,35 @@
 from fastapi import FastAPI, UploadFile, File
+import shutil
 import os
-import uvicorn
-from model import detect_cars, calculate_timer
+from model import count_cars
 
 app = FastAPI()
 
 @app.get("/")
-def home():
-    return {"message": "AI Traffic Signal Running ✅"}
+def read_root():
+    return {"message": "AI Traffic Signal API running"}
 
 @app.post("/traffic")
-async def traffic_signal(file: UploadFile = File(...)):
-    # Save uploaded image
-    contents = await file.read()
-    file_location = f"temp_{file.filename}"
-    with open(file_location, "wb") as f:
-        f.write(contents)
+async def traffic(file: UploadFile = File(...)):
+    # Save uploaded file
+    file_path = f"temp_{file.filename}"
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
 
-    # Detect cars
-    cars = detect_cars(file_location)
+    # Count cars
+    cars = count_cars(file_path)
 
-    # Calculate timer
-    timer = calculate_timer(cars)
+    # Timer rule: base 5 sec for 5 cars, each +1 car = +2 sec
+    if cars <= 5:
+        timer = 5
+    else:
+        timer = 5 + (cars - 5) * 2
 
-    # Remove temp file
-    os.remove(file_location)
+    # Clean up temp file
+    os.remove(file_path)
 
     return {
-        "cars_detected": cars,
-        "signal_timer": timer
+        "vehicles_detected": cars,
+        "timer": timer,
+        "filename": file.filename
     }
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("app:app", host="0.0.0.0", port=port)
