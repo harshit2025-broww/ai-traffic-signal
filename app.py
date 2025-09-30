@@ -1,37 +1,36 @@
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, UploadFile, File
 import os
-from model import count_vehicles
+import uvicorn
+from model import detect_cars, calculate_timer
 
-app = Flask(__name__)
+app = FastAPI()
 
-# Root route (health check)
-@app.route("/", methods=["GET"])
+@app.get("/")
 def home():
-    return jsonify({"status": "AI Traffic Signal Server is running!"})
+    return {"message": "AI Traffic Signal Running ✅"}
 
-# Prediction route
-@app.route("/predict", methods=["POST"])
-def predict():
-    if "file" not in request.files:
-        return jsonify({"error": "No file provided"}), 400
+@app.post("/traffic")
+async def traffic_signal(file: UploadFile = File(...)):
+    # Save uploaded image
+    contents = await file.read()
+    file_location = f"temp_{file.filename}"
+    with open(file_location, "wb") as f:
+        f.write(contents)
 
-    file = request.files["file"]
-    filepath = os.path.join("uploads", file.filename)
-    os.makedirs("uploads", exist_ok=True)
-    file.save(filepath)
+    # Detect cars
+    cars = detect_cars(file_location)
 
-    try:
-        vehicles = count_vehicles(filepath)
-        response = {
-            "vehicles_detected": vehicles,
-            "green_light_duration": min(60, max(10, vehicles * 2))  # simple logic
-        }
-    except Exception as e:
-        response = {"error": str(e)}
+    # Calculate timer
+    timer = calculate_timer(cars)
 
-    return jsonify(response)
+    # Remove temp file
+    os.remove(file_location)
+
+    return {
+        "cars_detected": cars,
+        "signal_timer": timer
+    }
 
 if __name__ == "__main__":
-    # important: 0.0.0.0 for Render, port from env
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("app:app", host="0.0.0.0", port=port)
