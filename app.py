@@ -1,49 +1,45 @@
 from fastapi import FastAPI, UploadFile, File
-import shutil
-import os
-from model import count_cars
+import numpy as np
+import cv2
+from ultralytics import YOLO
 
 app = FastAPI()
 
-@app.get("/")
-def home():
-    return {"message": "🚦 AI Traffic Signal API is running successfully on Render!"}
+# Load YOLOv8 model (ensure you have yolov8n.pt in your environment)
+model = YOLO('yolov8n.pt')
 
 @app.post("/traffic")
-async def traffic(file: UploadFile = File(...)):
-    """
-    Endpoint to receive image from ESP32-CAM,
-    count vehicles, calculate timer and return JSON response.
-    """
-    # Save uploaded image temporarily
-    file_path = f"temp_{file.filename}"
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+async def traffic_endpoint(file: UploadFile = File(...)):
+    contents = await file.read()
+    # Convert image bytes to OpenCV image
+    img = cv2.imdecode(np.frombuffer(contents, np.uint8), cv2.IMREAD_COLOR)
 
-    # Count cars using Haarcascade model
-    vehicles = count_cars(file_path)
+    # Run detection
+    results = model(img)
+
+    # Count cars only
+    car_count = 0
+    for box in results[0].boxes:
+        cls_id = int(box.cls)
+        label = model.names[cls_id]
+        if label == 'car':
+            car_count += 1
 
     # Timer logic:
-    # - If <= 5 vehicles → 5 seconds
-    # - Each additional vehicle adds 2 seconds
-    # - Minimum timer = 1 sec
-    if vehicles <= 5:
+    # If no vehicles: timer = 0 (red signal)
+    # If vehicles == 5: timer = 5 seconds
+    # If vehicles > 5: timer = 5 + 2*(extra vehicles)
+    # If vehicles < 5 and >0: timer = 5 seconds
+
+    if car_count == 0:
+        timer = 0  # Red signal default
+    elif car_count <= 5:
         timer = 5
     else:
-        timer = 5 + (vehicles - 5) * 2
-    timer = max(timer, 1)
+        extra = car_count - 5
+        timer = 5 + (extra * 2)
 
-    # Clean up temp file
-    os.remove(file_path)
-
-    # Return JSON for ESP32 or Postman test
     return {
-        "vehicles_detected": vehicles,
-        "green_timer_sec": timer,
-        "signal": "green" if vehicles > 0 else "red"
+        "vehicles_detected": car_count,
+        "timer": timer
     }
-
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 10000))  # Render sets PORT automatically
-    uvicorn.run("app:app", host="0.0.0.0", port=port)
